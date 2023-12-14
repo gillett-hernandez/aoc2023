@@ -1,0 +1,31 @@
+[package]
+name = "aoc2023"
+version = "0.1.0"
+edition = "2021"
+authors = ["Gillett Hernandez <gillett.hernandez@gmail.com>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+regex = "~1.10"
+
+[lib]
+name = "lib"
+path = "src/lib.rs"
+
+
+[profile.debug_dev]
+inherits = "dev"
+opt-level = 0
+panic = "abort"
+lto = false
+debug = true
+
+[profile.dev]
+opt-level = 3
+panic = 'abort'
+lto = "thin"
+debug = true
+
+[profile.test]
+opt-level = 0
