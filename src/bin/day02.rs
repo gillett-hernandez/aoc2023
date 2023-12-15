@@ -1,5 +1,4 @@
-use std::error::Error;
-use std::fmt::Display;
+use lib::LocalError;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -19,25 +18,6 @@ struct Pull {
 struct Game {
     pub id: usize,
     pub pulls: Vec<Pull>,
-}
-
-#[derive(Default, Debug)]
-struct LocalError {}
-
-impl Display for LocalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("")
-    }
-}
-
-impl Error for LocalError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
-    }
-
-    fn cause(&self) -> Option<&dyn Error> {
-        self.source()
-    }
 }
 
 impl TryFrom<&str> for Pull {
