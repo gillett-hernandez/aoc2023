@@ -9,6 +9,7 @@ authors = ["Gillett Hernandez <gillett.hernandez@gmail.com>"]
 [dependencies]
 regex = "~1.10"
 anyhow = "~1.0"
+rayon = "~1.8"
 
 [lib]
 name = "lib"
