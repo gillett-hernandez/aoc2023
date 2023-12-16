@@ -105,6 +105,8 @@ fn main() {
         }
     }
 
+    // TODO: optimize this solution to use ranges instead of individual seed values
+
     let mut min_location_in_spans = u64::MAX;
     let mut iter = seeds.iter();
     while let Ok(window) = iter.next_chunk::<2>() {
