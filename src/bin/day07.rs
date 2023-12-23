@@ -1,9 +1,56 @@
 use itertools::Itertools;
+use std::cmp::Ordering;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-#[derive(PartialEq, Eq, Debug, Copy, Clone, Hash, PartialOrd, Ord)]
+trait HasValue {
+    fn value(&self) -> i32;
+}
+
+trait HasHandType {
+    fn score(&self) -> HandType;
+}
+
+#[derive(PartialEq, Eq, Default, Debug, Copy, Clone, Hash, PartialOrd, Ord)]
 enum Card {
+    Two,
+    Three,
+    Four,
+    Five,
+    Six,
+    Seven,
+    Eight,
+    Nine,
+    Ten,
+    Jack,
+    Queen,
+    King,
+    #[default]
+    Ace,
+}
+
+impl HasValue for Card {
+    fn value(&self) -> i32 {
+        match self {
+            Card::Two => 2,
+            Card::Three => 3,
+            Card::Four => 4,
+            Card::Five => 5,
+            Card::Six => 6,
+            Card::Seven => 7,
+            Card::Eight => 8,
+            Card::Nine => 9,
+            Card::Ten => 10,
+            Card::Jack => 11,
+            Card::Queen => 12,
+            Card::King => 13,
+            Card::Ace => 14,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Copy, Clone, Hash, PartialOrd, Ord)]
+enum WildCard {
     Two,
     Three,
     Four,
@@ -19,22 +66,42 @@ enum Card {
     Ace,
 }
 
-impl Card {
-    pub fn value(&self) -> i32 {
+impl HasValue for WildCard {
+    fn value(&self) -> i32 {
         match self {
-            Card::Two => 2,
-            Card::Three => 3,
-            Card::Four => 4,
-            Card::Five => 5,
-            Card::Six => 6,
-            Card::Seven => 7,
-            Card::Eight => 8,
-            Card::Nine => 9,
-            Card::Ten => 10,
-            Card::Jack => 11,
-            Card::Queen => 12,
-            Card::King => 13,
-            Card::Ace => 14,
+            WildCard::Jack => 1,
+            WildCard::Two => 2,
+            WildCard::Three => 3,
+            WildCard::Four => 4,
+            WildCard::Five => 5,
+            WildCard::Six => 6,
+            WildCard::Seven => 7,
+            WildCard::Eight => 8,
+            WildCard::Nine => 9,
+            WildCard::Ten => 10,
+            WildCard::Queen => 11,
+            WildCard::King => 12,
+            WildCard::Ace => 13,
+        }
+    }
+}
+
+impl From<Card> for WildCard {
+    fn from(value: Card) -> Self {
+        match value {
+            Card::Two => WildCard::Two,
+            Card::Three => WildCard::Three,
+            Card::Four => WildCard::Four,
+            Card::Five => WildCard::Five,
+            Card::Six => WildCard::Six,
+            Card::Seven => WildCard::Seven,
+            Card::Eight => WildCard::Eight,
+            Card::Nine => WildCard::Nine,
+            Card::Ten => WildCard::Ten,
+            Card::Jack => WildCard::Jack,
+            Card::Queen => WildCard::Queen,
+            Card::King => WildCard::King,
+            Card::Ace => WildCard::Ace,
         }
     }
 }
@@ -63,9 +130,7 @@ impl TryFrom<char> for Card {
     }
 }
 
-impl TryFrom<&str> for Card
-// S: Into<Card>,
-{
+impl TryFrom<&str> for Card {
     type Error = ();
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let card_str = value.chars().nth(0).ok_or(())?;
@@ -76,23 +141,23 @@ impl TryFrom<&str> for Card
 }
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
-struct Hand(pub [Card; 5]);
+struct Hand<T>(pub [T; 5]);
 
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
-enum HandScore {
-    HighCard([Card; 5]),
-    OnePair([Card; 4]),
-    TwoPair([Card; 3]),
-    ThreeOfAKind([Card; 3]),
+enum HandType {
+    HighCard,
+    OnePair,
+    TwoPair,
+    ThreeOfAKind,
     // a straight is always uniquely identified by its start or end card. it's equivalent either way but we have to decide which it is
     // so in this case / program / context it is the high card.
-    Straight(Card),
-    FullHouse(Card, Card),   // 3, 2
-    FourOfAKind(Card, Card), // 4, 1
+    FullHouse,
+    FourOfAKind,
+    FiveOfAKind,
 }
 
-impl Hand {
-    pub fn score(&self) -> HandScore {
+impl HasHandType for Hand<Card> {
+    fn score(&self) -> HandType {
         let card_rank_bins = self.0.iter().counts_by(|e| *e);
 
         let mut as_vec = card_rank_bins.iter().collect::<Vec<(_, _)>>();
@@ -102,94 +167,149 @@ impl Hand {
         // thus, ranks that occur with equal count will still be ordered properly so that the highest rank is at the end
         as_vec.sort_by_key(|e| e.1);
 
-        // soundness: a well-formed hand (of 5 cards) will always have at least two unique ranks within it, as a deck only has 4 cards of the same rank
-        let (highest_count, second_highest_count) = (as_vec.pop().unwrap(), as_vec.pop().unwrap());
+        let (highest_count, second_highest_count) = (as_vec.pop().unwrap(), as_vec.pop());
         // println!("{:?} {:?}", highest_count, second_highest_count);
 
-        let mut current_match = match (highest_count.1, second_highest_count.1) {
-            (3, 2) => HandScore::FullHouse(*highest_count.0, *second_highest_count.0),
+        let current_match = match (
+            highest_count.1,
+            second_highest_count.map(|e| *e.1).unwrap_or(0),
+        ) {
+            (3, 2) => HandType::FullHouse,
             // soundness: in the 3,1 case, we know that there must be one more card that is distinct from the 3 and the 1, which is the other 1
-            (3, 1) => HandScore::ThreeOfAKind([
-                *highest_count.0,
-                *second_highest_count.0,
-                *as_vec.pop().unwrap().0,
-            ]),
-            (2, 2) => HandScore::TwoPair([
-                *highest_count.0,
-                *second_highest_count.0,
-                *as_vec.pop().unwrap().0,
-            ]),
-            (4, 1) => HandScore::FourOfAKind(*highest_count.0, *second_highest_count.0),
-            (2, 1) => HandScore::OnePair([
-                *highest_count.0,
-                *second_highest_count.0,
-                *as_vec.pop().unwrap().0,
-                *as_vec.pop().unwrap().0,
-            ]),
-            (1, 1) => HandScore::HighCard([
-                *highest_count.0,
-                *second_highest_count.0,
-                *as_vec.pop().unwrap().0,
-                *as_vec.pop().unwrap().0,
-                *as_vec.pop().unwrap().0,
-            ]),
+            (3, 1) => HandType::ThreeOfAKind,
+            (2, 2) => HandType::TwoPair,
+            (4, 1) => HandType::FourOfAKind,
+            (5, 0) => HandType::FiveOfAKind,
+            (2, 1) => HandType::OnePair,
+            (1, 1) => HandType::HighCard,
             _ => panic!("degenerate hand, this should not be possible."),
         };
-
-        let mut ranks = card_rank_bins
-            .clone()
-            .into_iter()
-            .map(|e| e.0)
-            .collect::<Vec<_>>();
-        ranks.sort();
-
-        // full house trumps flush and straight, so don't override if we already detected a full house
-        if ranks.len() == 5 && !matches!(current_match, HandScore::FullHouse(_, _)) {
-            if ranks
-                .windows(2)
-                .all(|slice| (slice[1].value() - slice[0].value()) == 1)
-            {
-                // straight
-
-                current_match = HandScore::Straight(*highest_count.0);
-            } else if ranks.contains(&Card::Ace) {
-                let value_with_remapped_ace = |e: Card| if e == Card::Ace { 1 } else { e.value() };
-                ranks.sort_by_key(|e| value_with_remapped_ace(*e));
-                if ranks.windows(2).all(|slice| {
-                    (value_with_remapped_ace(slice[1]) - value_with_remapped_ace(slice[0])) == 1
-                }) {
-                    current_match = HandScore::Straight(*ranks.last().unwrap());
-                }
-            }
-        }
 
         current_match
     }
 }
 
-impl TryFrom<&str> for Hand {
+impl HasHandType for Hand<WildCard> {
+    fn score(&self) -> HandType {
+        let card_rank_bins = self.0.iter().counts_by(|e| *e);
+
+        let mut as_vec = card_rank_bins.iter().collect::<Vec<(_, _)>>();
+        // sort by rank value first
+        as_vec.sort_by_key(|e| e.0.value());
+        // then by count
+        // thus, ranks that occur with equal count will still be ordered properly so that the highest rank is at the end
+        as_vec.sort_by_key(|e| e.1);
+
+        let (highest_count, second_highest_count) = (as_vec.pop().unwrap(), as_vec.pop());
+        // println!("{:?} {:?}", highest_count, second_highest_count);
+
+        let current_match = match (
+            highest_count.1,
+            second_highest_count.map(|e| *e.1).unwrap_or(0),
+        ) {
+            (3, 2) => HandType::FullHouse,
+            // soundness: in the 3,1 case, we know that there must be one more card that is distinct from the 3 and the 1, which is the other 1
+            (3, 1) => HandType::ThreeOfAKind,
+            (2, 2) => HandType::TwoPair,
+            (4, 1) => HandType::FourOfAKind,
+            (5, 0) => HandType::FiveOfAKind,
+            (2, 1) => HandType::OnePair,
+            (1, 1) => HandType::HighCard,
+            _ => panic!("degenerate hand, this should not be possible."),
+        };
+
+        current_match
+    }
+}
+
+impl<T> TryFrom<&str> for Hand<T>
+where
+    T: Default + TryFrom<char> + Copy,
+    (): From<<T as TryFrom<char>>::Error>,
+{
     type Error = ();
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let mut hand_inner = [Card::Ace, Card::Ace, Card::Ace, Card::Ace, Card::Ace];
+        let mut hand_inner = [T::default(); 5];
         let split = value.chars();
         let five = split.take(5).collect::<Vec<_>>();
         if five.len() != 5 {
             return Err(());
         }
 
-        hand_inner[0] = Card::try_from(five[0])?;
-        hand_inner[1] = Card::try_from(five[1])?;
-        hand_inner[2] = Card::try_from(five[2])?;
-        hand_inner[3] = Card::try_from(five[3])?;
-        hand_inner[4] = Card::try_from(five[4])?;
+        hand_inner[0] = T::try_from(five[0])?;
+        hand_inner[1] = T::try_from(five[1])?;
+        hand_inner[2] = T::try_from(five[2])?;
+        hand_inner[3] = T::try_from(five[3])?;
+        hand_inner[4] = T::try_from(five[4])?;
 
         Ok(Hand(hand_inner))
     }
 }
 
+impl<T> PartialOrd for Hand<T>
+where
+    T: HasValue + Eq + PartialEq + PartialOrd,
+    Hand<T>: HasHandType,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let left_score = self.score();
+        let right_score = other.score();
+        let Some(ord) = left_score.partial_cmp(&right_score) else {
+            return None;
+        };
+        match ord {
+            a @ Ordering::Less | a @ Ordering::Greater => Some(a),
+            Ordering::Equal => {
+                let mut current_order = Ordering::Equal;
+                for i in 0..5 {
+                    if current_order != Ordering::Equal {
+                        break;
+                    }
+                    current_order = self.0[i].partial_cmp(&other.0[i]).unwrap();
+                }
+
+                Some(current_order)
+            }
+        }
+    }
+}
+
+impl<T> Ord for Hand<T>
+where
+    T: HasValue + Eq + PartialEq + PartialOrd,
+    Hand<T>: HasHandType,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
 fn main() {
-    let file = File::open("samples/day07.txt").unwrap();
+    let file = File::open("data/day07.txt").unwrap();
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
-    while let Some(Ok(line)) = lines.next() {}
+
+    let mut hands_and_bids = Vec::new();
+    while let Some(Ok(line)) = lines.next() {
+        let mut split = line.split_whitespace();
+        let hand: Hand<Card> = split.next().unwrap().try_into().unwrap();
+        let bid = split.next().unwrap().parse::<usize>().unwrap();
+
+        hands_and_bids.push((hand, bid));
+    }
+
+    hands_and_bids.sort_by_key(|e| e.0);
+
+    let mut winnings = 0;
+    for (rank, (_, bid)) in hands_and_bids.iter().enumerate() {
+        winnings += (1 + rank) * bid;
+    }
+    println!("{winnings}");
+
+    let mut new_hands_and_bids = hands_and_bids
+        .into_iter()
+        .map(|(hand, bid)| (Hand(hand.0.map(|e| WildCard::from(e))), bid))
+        .collect::<Vec<_>>();
+
+    new_hands_and_bids.sort_by_key(|e| e.0);
 }
