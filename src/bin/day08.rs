@@ -2,6 +2,20 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
+fn gcd(mut a:usize, mut b:usize) -> usize {
+    //best to use euclidean algorithm
+    if a < b {
+        std::mem::swap(&mut a, &mut b);
+    }
+    let mut remainder = a % b;
+    while a % remainder != 0 && b % remainder != 0 {
+        std::mem::swap(&mut a, &mut b);
+        std::mem::swap(&mut b, &mut remainder);
+        remainder = a % b;
+    }
+    remainder
+}
+
 fn main() {
     let file = File::open("data/day08.txt").unwrap();
     let reader = BufReader::new(file);
@@ -66,30 +80,9 @@ fn main() {
             step_count += 1;
         }
         cycle_lengths.push(step_count);
-        println!("{step_count}");
     }
 
     // compute lcm of numbers
-    let prod: usize = cycle_lengths.iter().product();
-    println!("{:?}", prod);
-
-    // let mut step_count = 0;
-    // while starting_nodes
-    //     .par_iter()
-    //     .filter(|e| e.chars().nth(2).unwrap() != 'Z')
-    //     .count()
-    //     != 0
-    // {
-    //     // println!("{:?}", current_nodes);
-    //     let next_pattern_entry = pattern_inf_iter.next().unwrap();
-    //     starting_nodes.par_iter_mut().for_each(|e| {
-    //         *e = match next_pattern_entry {
-    //             'L' => network[*e].0.as_str(),
-    //             'R' => network[*e].1.as_str(),
-    //             _ => panic!(),
-    //         };
-    //     });
-    //     step_count += 1;
-    // }
-    println!("took {step_count} steps to reach all ??Zs");
+    let lcm: usize = cycle_lengths.into_iter().reduce(|a,b| a*b/gcd(a,b)).unwrap();
+    println!("{lcm}");
 }
