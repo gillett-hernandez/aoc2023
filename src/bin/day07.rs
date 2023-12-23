@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use std::cmp::Ordering;
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -51,6 +52,7 @@ impl HasValue for Card {
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone, Hash, PartialOrd, Ord)]
 enum WildCard {
+    Jack,
     Two,
     Three,
     Four,
@@ -60,7 +62,6 @@ enum WildCard {
     Eight,
     Nine,
     Ten,
-    Jack,
     Queen,
     King,
     Ace,
@@ -175,7 +176,7 @@ impl HasHandType for Hand<Card> {
             second_highest_count.map(|e| *e.1).unwrap_or(0),
         ) {
             (3, 2) => HandType::FullHouse,
-            // soundness: in the 3,1 case, we know that there must be one more card that is distinct from the 3 and the 1, which is the other 1
+
             (3, 1) => HandType::ThreeOfAKind,
             (2, 2) => HandType::TwoPair,
             (4, 1) => HandType::FourOfAKind,
@@ -191,7 +192,13 @@ impl HasHandType for Hand<Card> {
 
 impl HasHandType for Hand<WildCard> {
     fn score(&self) -> HandType {
-        let card_rank_bins = self.0.iter().counts_by(|e| *e);
+        // theory: the best possible joker interpretation for the purposes of hand rank is the one that achieves the most duplicate cards.
+        // thus, use jokers to extend already existing streaks if possible.
+        let card_rank_bins = self
+            .0
+            .iter()
+            .filter(|e| **e != WildCard::Jack) // filter jokers out so that they don't stack with themselves
+            .counts_by(|e| *e);
 
         let mut as_vec = card_rank_bins.iter().collect::<Vec<(_, _)>>();
         // sort by rank value first
@@ -200,23 +207,36 @@ impl HasHandType for Hand<WildCard> {
         // thus, ranks that occur with equal count will still be ordered properly so that the highest rank is at the end
         as_vec.sort_by_key(|e| e.1);
 
-        let (highest_count, second_highest_count) = (as_vec.pop().unwrap(), as_vec.pop());
+        let (highest_count, second_highest_count) = (as_vec.pop(), as_vec.pop());
         // println!("{:?} {:?}", highest_count, second_highest_count);
 
-        let current_match = match (
-            highest_count.1,
+        let mut current_match = match (
+            highest_count.map(|e| *e.1).unwrap_or(0),
             second_highest_count.map(|e| *e.1).unwrap_or(0),
         ) {
             (3, 2) => HandType::FullHouse,
-            // soundness: in the 3,1 case, we know that there must be one more card that is distinct from the 3 and the 1, which is the other 1
-            (3, 1) => HandType::ThreeOfAKind,
+            (3, _) => HandType::ThreeOfAKind,
             (2, 2) => HandType::TwoPair,
-            (4, 1) => HandType::FourOfAKind,
+            (4, _) => HandType::FourOfAKind,
             (5, 0) => HandType::FiveOfAKind,
-            (2, 1) => HandType::OnePair,
-            (1, 1) => HandType::HighCard,
-            _ => panic!("degenerate hand, this should not be possible."),
+            (2, _) => HandType::OnePair,
+            _ => HandType::HighCard,
         };
+
+        // we've determined a preliminary hand type, use the jokers to extend/mutate it
+        let num_jokers = self.0.iter().filter(|e| **e == WildCard::Jack).count();
+
+        for _ in 0..num_jokers {
+            current_match = match current_match {
+                HandType::HighCard => HandType::OnePair,
+                HandType::OnePair => HandType::ThreeOfAKind,
+                HandType::TwoPair => HandType::FullHouse,
+                HandType::ThreeOfAKind => HandType::FourOfAKind,
+                HandType::FullHouse => HandType::FourOfAKind,
+                HandType::FourOfAKind => HandType::FiveOfAKind,
+                HandType::FiveOfAKind => HandType::FiveOfAKind,
+            };
+        }
 
         current_match
     }
@@ -249,6 +269,7 @@ where
 impl<T> PartialOrd for Hand<T>
 where
     T: HasValue + Eq + PartialEq + PartialOrd,
+    T: Debug,
     Hand<T>: HasHandType,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -277,6 +298,7 @@ where
 impl<T> Ord for Hand<T>
 where
     T: HasValue + Eq + PartialEq + PartialOrd,
+    T: Debug,
     Hand<T>: HasHandType,
 {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -306,10 +328,18 @@ fn main() {
     }
     println!("{winnings}");
 
+    // remap old card type to new card type
     let mut new_hands_and_bids = hands_and_bids
         .into_iter()
         .map(|(hand, bid)| (Hand(hand.0.map(|e| WildCard::from(e))), bid))
         .collect::<Vec<_>>();
 
+    // sort using new sorting method, with Ord and such implemented using generics but with Value and HandType being returned from Trait methods
     new_hands_and_bids.sort_by_key(|e| e.0);
+
+    let mut winnings = 0;
+    for (rank, (_, bid)) in new_hands_and_bids.iter().enumerate() {
+        winnings += (1 + rank) * bid;
+    }
+    println!("{winnings}");
 }
