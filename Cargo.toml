@@ -10,6 +10,7 @@ authors = ["Gillett Hernandez <gillett.hernandez@gmail.com>"]
 regex = "~1.10"
 anyhow = "~1.0"
 rayon = "~1.8"
+itertools = "~0.12"
 
 [lib]
 name = "lib"
