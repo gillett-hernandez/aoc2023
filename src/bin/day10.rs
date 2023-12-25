@@ -15,7 +15,7 @@ use std::{
     iter::once,
 };
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 enum Direction {
     North,
     South,
@@ -42,6 +42,19 @@ impl Into<(isize, isize)> for Direction {
             Direction::South => (0, 1),
             Direction::East => (1, 0),
             Direction::West => (-1, 0),
+        }
+    }
+}
+
+impl TryFrom<(isize, isize)> for Direction {
+    type Error = ();
+    fn try_from(value: (isize, isize)) -> Result<Self, Self::Error> {
+        match (value.0.signum(), value.1.signum()) {
+            (-1, 0) => Ok(Direction::West),
+            (1, 0) => Ok(Direction::East),
+            (0, -1) => Ok(Direction::North),
+            (0, 1) => Ok(Direction::South),
+            _ => Err(()),
         }
     }
 }
@@ -227,7 +240,7 @@ fn main() {
     // correct map height to new height, after adding dots
     map_height += 2;
 
-    let map = TileMap {
+    let mut map = TileMap {
         data: tiledata,
         width: map_width,
         height: map_height,
@@ -240,23 +253,83 @@ fn main() {
         .find_map(|(i, e)| (*e == 'S').then_some(i))
         .unwrap();
     let animal_position = (animal_idx % map.width, animal_idx / map.width);
-    println!("{animal_position:?}");
-    println!("{}", map);
-
-    println!("{:?}", map.get_connected_pipes_at(animal_position));
 
     // pt 1
     let mut max_dist = 0;
     let mut max_point = animal_position;
-    let traversal = map.traverse(animal_position);
-    for (point, distance) in traversal {
-        if distance > max_dist {
-            println!("{point:?} is {distance} away");
-            max_point = point;
-            max_dist = distance;
+    let mut traversal = map.traverse(animal_position);
+    for (point, distance) in &traversal {
+        if *distance > max_dist {
+            max_point = *point;
+            max_dist = *distance;
         }
     }
     println!("{max_point:?} {max_dist}");
 
     // using traversal data from pt 1, work on pt 2
+    // insert starting point so that there's no holes in the loop
+    traversal.push((animal_position, 0));
+
+    let neighbors = map.get_connected_pipes_at(animal_position).unwrap();
+    let mut directions = [Direction::West, Direction::West];
+    for (i, neighbor) in neighbors.iter().enumerate() {
+        let offset = (
+            neighbor.0 as isize - animal_position.0 as isize,
+            neighbor.1 as isize - animal_position.1 as isize,
+        );
+        let as_direction = Direction::try_from(offset).unwrap();
+        directions[i] = as_direction;
+    }
+
+    let matching_character = OFFSET_MAP
+        .iter()
+        .find_map(|(c, maybe_offset)| {
+            if let Some(offset) = maybe_offset {
+                if (offset[0] == directions[0] && offset[1] == directions[1])
+                    || (offset[0] == directions[1] && offset[0] == directions[1])
+                {
+                    Some(*c)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    map.data[animal_position.1 * map.width + animal_position.0] = matching_character;
+
+    let traversal = traversal.into_iter().collect::<HashMap<_, _>>();
+    for y in 0..map.height {
+        for x in 0..map.width {
+            if !traversal.contains_key(&(x, y)) {
+                // delete irrelevant pipes
+                map.data[y * map.width + x] = '.';
+            }
+        }
+    }
+
+    let mut sum_inner = 0;
+    for y in 0..map.height {
+        let mut is_outside = true;
+        for x in 0..map.width {
+            let c = map.data[y * map.width + x];
+            // use polygon point testing method, with the point for testing being slightly up (north) and left (west) and pointing to the right
+            if c == '|' || c == 'J' || c == 'L' {
+                // found boundary
+                is_outside = !is_outside;
+            }
+            if c == '.' {
+                match is_outside {
+                    true => map.data[y * map.width + x] = 'O',
+                    false => {
+                        sum_inner += 1;
+                        map.data[y * map.width + x] = 'I'
+                    }
+                }
+            }
+        }
+    }
+    println!("{}", sum_inner);
 }
