@@ -215,7 +215,7 @@ fn main() {
     use std::io::{BufRead, BufReader};
     let file = File::open("data/day10.txt").unwrap();
     let reader = BufReader::new(file);
-    let mut lines = reader.lines();
+    let lines = reader.lines();
 
     let mut tiledata = Vec::new();
     let mut map_width = 0;
