@@ -48,12 +48,10 @@ impl Universe {
 
         self.height += rows_to_expand.len();
 
-        println!("{}", self);
         self.transpose();
-        println!("{}", self);
-        // swaps width and height
+        // transposing swaps rows and columns, and width and height
 
-        // repeat above step but with columns
+        // repeat above step but with columns, but treat them as rows because we transposed
         for row in columns_to_expand.iter().rev() {
             // iter in reverse order so that expanding the vec doesn't cause our indexes to become invalid
             // which is what would happen if we expand an earlier row and then go to a later row
@@ -85,7 +83,7 @@ fn main() {
     // just put it into a vec
     let mut data = Vec::new();
 
-    let mut width = 0; // setting to 0 to satisfy compiler
+    let mut width = 0; // setting to 0 to satisfy compiler "maybe uninit" warning
                        // but the value will always be set on the first iteration of the following loop, since data will be empty.
 
     let mut height = 0;
@@ -125,12 +123,11 @@ fn main() {
             columns_to_expand.push(x);
         }
     }
-    println!("{:?}, {:?}", rows_to_expand, columns_to_expand);
 
     universe.expand(rows_to_expand, columns_to_expand);
 
     println!("{}", universe);
-    
+
     let mut galaxies = Vec::new();
     for y in 0..universe.height {
         for x in 0..universe.width {
@@ -139,13 +136,13 @@ fn main() {
             }
         }
     }
-    
+
     let mut sum = 0;
     for i in 0..galaxies.len() {
         for j in 0..i {
             let gi = galaxies[i];
             let gj = galaxies[j];
-            
+
             sum += (gi.0 - gj.0).abs() + (gi.1-gj.1).abs();
         }
     }
