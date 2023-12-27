@@ -1,14 +1,26 @@
-use std::{fmt::Display, iter::once};
+use std::{fmt::Display, iter::once, ops::Range};
 
-#[derive(Copy, Clone, Debug)]
+use itertools::Itertools;
+
+#[derive(Clone, PartialEq, Debug)]
 enum HorizontalCell {
     Galaxy,
-    Space(Range<i32>),
+    Space(Range<usize>),
 }
 
+#[derive(Clone, PartialEq, Debug)]
 enum VerticalCell {
     Line(Vec<HorizontalCell>),
-    Space(Range<i32>),
+    Space(Range<usize>),
+}
+
+impl VerticalCell {
+    pub fn len(&self) -> usize {
+        match self {
+            VerticalCell::Line(l) => l.len(),
+            VerticalCell::Space(_) => 1,
+        }
+    }
 }
 
 struct Universe {
@@ -20,20 +32,29 @@ struct Universe {
 impl Display for Universe {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
-        if self.width > 100 || self.height > 100 {
-            
-            return Ok(());
-        }
+            if self.width > 100 || self.height > 100 {
+                return Ok(());
+            }
         // need to rewrite printing logic
         } else {
-            let _ = f.write_fmt(format_args!("Universe(Vec with {} * sizeof(Cell) bytes, {}, {})", self.data.iter().map(|e| e.len()).sum::<usize>(), self.width, self.height));
+            let _ = f.write_fmt(format_args!(
+                "Universe(Vec with {} * sizeof(Cell) bytes, {}, {})",
+                self.data.iter().map(|e| e.len()).sum::<usize>(),
+                self.width,
+                self.height
+            ));
         }
         Ok(())
     }
 }
 
 impl Universe {
-    fn expand(&mut self, rows_to_expand: Vec<usize>, columns_to_expand: Vec<usize>, expansiom_multiplier: usize) {
+    fn expand(
+        &mut self,
+        rows_to_expand: Vec<usize>,
+        columns_to_expand: Vec<usize>,
+        expansiom_multiplier: usize,
+    ) {
         // perform row expansion first, for no specific reason
 
         for row in rows_to_expand.iter().rev() {
@@ -41,42 +62,35 @@ impl Universe {
             // which is what would happen if we expand an earlier row and then go to a later row
 
             // each of the rows to expand should each be already empty space
-            
-            let row = self.data[*row];
-            
+
+            // let row = &mut self.data[*row];
         }
 
         self.height += rows_to_expand.len();
 
-        self.transpose();
-        // transposing swaps rows and columns, and width and height
+        // // repeat above step but with columns, but treat them as rows because we transposed
+        // for row in columns_to_expand.iter().rev() {
+        //     // iter in reverse order so that expanding the vec doesn't cause our indexes to become invalid
+        //     // which is what would happen if we expand an earlier row and then go to a later row
 
-        // repeat above step but with columns, but treat them as rows because we transposed
-        for row in columns_to_expand.iter().rev() {
-            // iter in reverse order so that expanding the vec doesn't cause our indexes to become invalid
-            // which is what would happen if we expand an earlier row and then go to a later row
+        //     self.data.extend(once('.').cycle().take(self.width));
 
-            self.data.extend(once('.').cycle().take(self.width));
+        //     let row_begin_index = *row * self.width;
+        //     let row_end_index = row_begin_index + self.width;
 
-            let row_begin_index = *row * self.width;
-            let row_end_index = row_begin_index + self.width;
-
-            // shift all elements down a row
-            for i in (row_end_index..self.data.len()).rev() {
-                self.data[i] = self.data[i - self.width];
-            }
-        }
-        self.height += columns_to_expand.len();
-
-        // transpose again
-        self.transpose();
+        //     // shift all elements down a row
+        //     for i in (row_end_index..self.data.len()).rev() {
+        //         self.data[i] = self.data[i - self.width];
+        //     }
+        // }
+        // self.height += columns_to_expand.len();
     }
 }
 
 fn main() {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
-    let file = File::open("data/day11.txt").unwrap();
+    let file = File::open("samples/day11.txt").unwrap();
     let reader = BufReader::new(file);
     let lines = reader.lines();
 
@@ -95,59 +109,94 @@ fn main() {
         height += 1;
     }
 
+    let mut v_cells = Vec::new();
+
+    for y in 0..height {
+        let mut h_cells = Vec::new();
+        let chars = &data[y * width..(y + 1) * width];
+        let mut last_galaxy_index = chars
+            .iter()
+            .enumerate()
+            .find_map(|e| (*e.1 == '#').then_some(e.0))
+            .unwrap_or(chars.len());
+        if last_galaxy_index != 0 {
+            h_cells.push(HorizontalCell::Space(0..last_galaxy_index));
+        }
+
+        if last_galaxy_index < chars.len() {
+            h_cells.push(HorizontalCell::Galaxy);
+        }
+        let mut i = last_galaxy_index + 1;
+        while i < chars.len() {
+            if chars[i] == '#' {
+                if last_galaxy_index + 1 < i {
+                    h_cells.push(HorizontalCell::Space(last_galaxy_index + 1..i));
+                }
+                h_cells.push(HorizontalCell::Galaxy);
+                last_galaxy_index = i;
+            }
+            i += 1;
+        }
+
+        if last_galaxy_index + 1 < i {
+            h_cells.push(HorizontalCell::Space(last_galaxy_index + 1..i));
+        }
+        println!("{:?}", h_cells);
+        v_cells.push(VerticalCell::Line(h_cells));
+    }
+
     let mut universe = Universe {
-        data,
+        data: v_cells,
         width,
         height,
     };
 
-    let mut rows_to_expand = Vec::new();
-    for y in 0..height {
-        if universe.data[y * width..(y + 1) * width]
-            .iter()
-            .all(|e| *e != '#')
-        {
-            rows_to_expand.push(y);
-        }
-    }
+    // let mut rows_to_expand = Vec::new();
+    // for y in 0..height {
+    //     if universe.data[y * width..(y + 1) * width]
+    //         .iter()
+    //         .all(|e| *e != '#')
+    //     {
+    //         rows_to_expand.push(y);
+    //     }
+    // }
 
-    let mut columns_to_expand = Vec::new();
-    for x in 0..width {
-        if universe
-            .data
-            .iter()
-            .skip(x)
-            .step_by(width)
-            .all(|e| *e != '#')
-        {
-            columns_to_expand.push(x);
-        }
-    }
+    // let mut columns_to_expand = Vec::new();
+    // for x in 0..width {
+    //     if universe
+    //         .data
+    //         .iter()
+    //         .skip(x)
+    //         .step_by(width)
+    //         .all(|e| *e != '#')
+    //     {
+    //         columns_to_expand.push(x);
+    //     }
+    // }
 
-    universe.expand(rows_to_expand, columns_to_expand);
+    // universe.expand(rows_to_expand, columns_to_expand);
 
-    println!("{}", universe);
+    // println!("{}", universe);
 
-    let mut galaxies = Vec::new();
-    for y in 0..universe.height {
-        for x in 0..universe.width {
-            if universe.data[y * universe.width + x] == '#' {
-                galaxies.push((x as isize,y as isize));
-            }
-        }
-    }
+    // let mut galaxies = Vec::new();
+    // for y in 0..universe.height {
+    //     for x in 0..universe.width {
+    //         if universe.data[y * universe.width + x] == '#' {
+    //             galaxies.push((x as isize, y as isize));
+    //         }
+    //     }
+    // }
 
-    let mut sum = 0;
-    for i in 0..galaxies.len() {
-        for j in 0..i {
-            let gi = galaxies[i];
-            let gj = galaxies[j];
+    // let mut sum = 0;
+    // for i in 0..galaxies.len() {
+    //     for j in 0..i {
+    //         let gi = galaxies[i];
+    //         let gj = galaxies[j];
 
-            sum += (gi.0 - gj.0).abs() + (gi.1-gj.1).abs();
-        }
-    }
-    println!("{sum}");
-    
+    //         sum += (gi.0 - gj.0).abs() + (gi.1 - gj.1).abs();
+    //     }
+    // }
+    // println!("{sum}");
+
     //pt 2 will likely require a sparse matrix implementation of some sort
-    
 }
