@@ -82,7 +82,7 @@ impl Universe {
 fn main() {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
-    let file = File::open("samples/day11.txt").unwrap();
+    let file = File::open("data/day11.txt").unwrap();
     let reader = BufReader::new(file);
     let lines = reader.lines();
 
@@ -132,4 +132,25 @@ fn main() {
 
     universe.expand(rows_to_expand, columns_to_expand);
 
+    println!("{}", universe);
+
+    let mut galaxies = Vec::new();
+    for y in 0..universe.height {
+        for x in 0..universe.width {
+            if universe.data[y * universe.width + x] == '#' {
+                galaxies.push((x as isize,y as isize));
+            }
+        }
+    }
+
+    let mut sum = 0;
+    for i in 0..galaxies.len() {
+        for j in 0..i {
+            let gi = galaxies[i];
+            let gj = galaxies[j];
+
+            sum += (gi.0 - gj.0).abs() + (gi.1-gj.1).abs();
+        }
+    }
+    println!("{sum}");
 }
