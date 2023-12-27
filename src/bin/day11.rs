@@ -1,55 +1,49 @@
 use std::{fmt::Display, iter::once};
 
+#[derive(Copy, Clone, Debug)]
+enum HorizontalCell {
+    Galaxy,
+    Space(Range<i32>),
+}
+
+enum VerticalCell {
+    Line(Vec<HorizontalCell>),
+    Space(Range<i32>),
+}
+
 struct Universe {
-    pub data: Vec<char>,
+    pub data: Vec<VerticalCell>,
     pub width: usize,
     pub height: usize,
 }
 
 impl Display for Universe {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for y in 0..self.height {
-            let joined = self.data[y * self.width..(y + 1) * self.width]
-                .iter()
-                .cloned()
-                .collect::<String>();
-
-            let _ = f.write_fmt(format_args!("{}\n", joined.as_str()));
+        if f.alternate() {
+        if self.width > 100 || self.height > 100 {
+            
+            return Ok(());
+        }
+        // need to rewrite printing logic
+        } else {
+            let _ = f.write_fmt(format_args!("Universe(Vec with {} * sizeof(Cell) bytes, {}, {})", self.data.iter().map(|e| e.len()).sum::<usize>(), self.width, self.height));
         }
         Ok(())
     }
 }
 
 impl Universe {
-    fn transpose(&mut self) {
-        let mut clone = self.data.clone();
-        clone.clear();
-
-        for x in 0..self.width {
-            for y in 0..self.height {
-                clone.push(self.data[y * self.width + x]);
-            }
-        }
-
-        self.data = clone;
-        std::mem::swap(&mut self.width, &mut self.height);
-    }
-    fn expand(&mut self, rows_to_expand: Vec<usize>, columns_to_expand: Vec<usize>) {
+    fn expand(&mut self, rows_to_expand: Vec<usize>, columns_to_expand: Vec<usize>, expansiom_multiplier: usize) {
         // perform row expansion first, for no specific reason
 
         for row in rows_to_expand.iter().rev() {
             // iter in reverse order so that expanding the vec doesn't cause our indexes to become invalid
             // which is what would happen if we expand an earlier row and then go to a later row
 
-            self.data.extend(once('.').cycle().take(self.width));
-
-            let row_begin_index = *row * self.width;
-            let row_end_index = row_begin_index + self.width;
-
-            // shift all elements down a row
-            for i in (row_end_index..self.data.len()).rev() {
-                self.data[i] = self.data[i - self.width];
-            }
+            // each of the rows to expand should each be already empty space
+            
+            let row = self.data[*row];
+            
         }
 
         self.height += rows_to_expand.len();
@@ -156,4 +150,7 @@ fn main() {
         }
     }
     println!("{sum}");
+    
+    //pt 2 will likely require a sparse matrix implementation of some sort
+    
 }
