@@ -74,17 +74,14 @@ impl Universe {
     ) {
         // perform row expansion first, for no specific reason
 
-        for row in rows_to_expand.iter().rev() {
-            // iter in reverse order so that expanding the vec doesn't cause our indexes to become invalid
-            // which is what would happen if we expand an earlier row and then go to a later row
-
-            // each of the rows to expand should each be already empty space
+        for row in &rows_to_expand {
+            // each of the rows to expand should each already be empty space
 
             let row = &mut self.data[*row];
             if let VerticalCell::Line(arr) = row.clone() {
                 if arr.len() == 1 {
                     if let HorizontalCell::Space(_) = &arr[0] {
-                        // found a vertical cell composed of a single line of empty space
+                        // confirmed we found a vertical cell comprised of a single line of empty space
                         *row = VerticalCell::Space(expansion_multiplier); // convert to a big chunk of empty space, with size equal to the expansion amount
                     }
                 }
@@ -94,6 +91,8 @@ impl Universe {
         self.height += rows_to_expand.len() * (expansion_multiplier - 1);
 
         for column in columns_to_expand.iter().rev() {
+            // iter in reverse order so that expanding the vec doesn't cause our column indices to become invalid
+            // which is what would happen if we expand an earlier column and then go to a later column
             for vcell in self.data.iter_mut() {
                 match vcell {
                     VerticalCell::Line(hcells) => {
@@ -106,10 +105,12 @@ impl Universe {
                                         // found space chunk containing `column`
                                         // expand it
                                         *width += expansion_multiplier - 1;
-                                        // break, since we already found `column`
+                                        // break out of this horizontal scan, since we already found `column`
                                         break;
+                                    } else {
+                                        // continue to next horizontal cell, adding the width of the cell we're skipping
+                                        i += *width;
                                     }
-                                    i += *width;
                                 }
                             }
                         }
@@ -191,7 +192,7 @@ fn main() {
         while i < chars.len() {
             if chars[i] == '#' {
                 if last_galaxy_index + 1 < i {
-                    h_cells.push(HorizontalCell::Space(i - last_galaxy_index));
+                    h_cells.push(HorizontalCell::Space(i - last_galaxy_index - 1));
                 }
                 h_cells.push(HorizontalCell::Galaxy);
                 last_galaxy_index = i;
@@ -202,56 +203,48 @@ fn main() {
         if last_galaxy_index + 1 < i {
             h_cells.push(HorizontalCell::Space(i - last_galaxy_index - 1));
         }
-        println!("{:?}", h_cells);
         v_cells.push(VerticalCell::Line(h_cells));
     }
 
-    let mut universe = Universe {
-        data: v_cells,
-        width,
-        height,
-    };
+    for expansion_mult in [2, 1000000] {
+        let mut universe = Universe {
+            data: v_cells.clone(),
+            width,
+            height,
+        };
 
-    let mut rows_to_expand = Vec::new();
-    for y in 0..height {
-        if data[y * width..(y + 1) * width].iter().all(|e| *e != '#') {
-            rows_to_expand.push(y);
+        let mut rows_to_expand = Vec::new();
+        for y in 0..height {
+            if data[y * width..(y + 1) * width].iter().all(|e| *e != '#') {
+                rows_to_expand.push(y);
+            }
         }
-    }
 
-    let mut columns_to_expand = Vec::new();
-    for x in 0..width {
-        if data.iter().skip(x).step_by(width).all(|e| *e != '#') {
-            columns_to_expand.push(x);
+        let mut columns_to_expand = Vec::new();
+        for x in 0..width {
+            if data.iter().skip(x).step_by(width).all(|e| *e != '#') {
+                columns_to_expand.push(x);
+            }
         }
-    }
 
-    println!();
-    println!();
-    universe.expand(rows_to_expand, columns_to_expand, 2);
+        universe.expand(rows_to_expand, columns_to_expand, expansion_mult);
 
-    println!("{:#}", universe);
-    println!("width {}, height {}", universe.width, universe.height);
 
-    let galaxies = universe
-        .all_galaxy_positions()
-        .into_iter()
-        .map(|e| (e.0 as isize, e.1 as isize))
-        .collect::<Vec<_>>();
+        let galaxies = universe
+            .all_galaxy_positions()
+            .into_iter()
+            .map(|e| (e.0 as isize, e.1 as isize))
+            .collect::<Vec<_>>();
 
-    for g in &galaxies {
-        println!("{:?}", g);
-    }
-    let mut sum = 0;
-    for i in 0..galaxies.len() {
-        for j in 0..i {
-            let gi = galaxies[i];
-            let gj = galaxies[j];
+        let mut sum = 0;
+        for i in 0..galaxies.len() {
+            for j in 0..i {
+                let gi = galaxies[i];
+                let gj = galaxies[j];
 
-            sum += (gi.0 - gj.0).abs() + (gi.1 - gj.1).abs();
+                sum += (gi.0 - gj.0).abs() + (gi.1 - gj.1).abs();
+            }
         }
+        println!("{sum}");
     }
-    println!("{sum}");
-
-    //pt 2 will likely require a sparse matrix implementation of some sort
 }
